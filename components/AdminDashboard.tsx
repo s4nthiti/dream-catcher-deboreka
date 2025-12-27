@@ -1,9 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { DEBOREKA_PARTS } from "@/lib/utils"
 import { useLanguage } from "@/contexts/LanguageContext"
 import { t } from "@/lib/i18n"
+import { useSSE, SSEMessage } from "@/hooks/useSSE"
+import { usePolling } from "@/hooks/usePolling"
 
 const PART_TRANSLATIONS: Record<string, { en: string; th: string }> = {
   NECKLACE: { en: "Necklace", th: "สร้อยคอ" },
@@ -34,11 +36,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchEnhancements()
-  }, [])
-
-  const fetchEnhancements = async () => {
+  const fetchEnhancements = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/enhancements")
       if (res.ok) {
@@ -50,7 +48,52 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchEnhancements()
+
+    // Listen for immediate updates when enhancements are added or deleted
+    const handleEnhancementAdded = () => {
+      console.log("Enhancement added event received, refreshing admin dashboard...")
+      fetchEnhancements()
+    }
+
+    const handleEnhancementDeleted = () => {
+      console.log("Enhancement deleted event received, refreshing admin dashboard...")
+      fetchEnhancements()
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('enhancementAdded', handleEnhancementAdded)
+      window.addEventListener('enhancementDeleted', handleEnhancementDeleted)
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('enhancementAdded', handleEnhancementAdded)
+        window.removeEventListener('enhancementDeleted', handleEnhancementDeleted)
+      }
+    }
+  }, [fetchEnhancements])
+
+  // Handle SSE messages for real-time updates
+  const handleSSEMessage = useCallback((message: SSEMessage) => {
+    if (message.event === "enhancement:added" || 
+        message.event === "enhancement:deleted") {
+      console.log("Admin dashboard SSE update received, refreshing...")
+      fetchEnhancements()
+    }
+  }, [fetchEnhancements])
+
+  // Connect to SSE for real-time updates
+  useSSE("/api/events", handleSSEMessage, true)
+
+  // Add polling as a fallback (every 30 seconds for admin view)
+  usePolling(fetchEnhancements, {
+    interval: 30000, // 30 seconds
+    enabled: true,
+  })
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this enhancement?")) {
@@ -65,6 +108,13 @@ export default function AdminDashboard() {
 
       if (res.ok) {
         setEnhancements(enhancements.filter((e) => e.id !== id))
+        
+        // Broadcast custom event to trigger immediate refresh in other components
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('enhancementDeleted', { 
+            detail: { id } 
+          }))
+        }
       } else {
         alert("Failed to delete enhancement")
       }

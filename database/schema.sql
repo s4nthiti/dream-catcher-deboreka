@@ -69,6 +69,17 @@ CREATE TABLE IF NOT EXISTS crowns (
   UNIQUE("userId", part, "weekStartDate")
 );
 
+-- Enhancement Records table (for tracking enhancement levels 0-V)
+CREATE TABLE IF NOT EXISTS enhancement_records (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId" TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  part TEXT NOT NULL CHECK (part IN ('NECKLACE', 'EARRING', 'RING', 'BELT')),
+  "fromLevel" TEXT CHECK ("fromLevel" IN ('0', 'I', 'II', 'III', 'IV')),
+  level TEXT NOT NULL CHECK (level IN ('0', 'I', 'II', 'III', 'IV', 'V')),
+  success BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP DEFAULT NOW()
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_enhancements_user_week_part ON enhancements("userId", "weekStartDate", part);
 CREATE INDEX IF NOT EXISTS idx_enhancements_week_part ON enhancements("weekStartDate", part);
@@ -76,4 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_crowns_part_week ON crowns(part, "weekStartDate")
 CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts("userId");
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions("userId");
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions("sessionToken");
+CREATE INDEX IF NOT EXISTS idx_enhancement_records_created ON enhancement_records("createdAt" DESC);
+CREATE INDEX IF NOT EXISTS idx_enhancement_records_user ON enhancement_records("userId");
+CREATE INDEX IF NOT EXISTS idx_enhancement_records_part ON enhancement_records(part);
 

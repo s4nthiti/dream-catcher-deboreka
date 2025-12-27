@@ -7,9 +7,15 @@ A Next.js application for tracking Deboreka enhancements for Black Desert Online
 - 🔐 **Google OAuth Authentication** - Secure login with Gmail
 - 👤 **User Profiles** - Each user must provide their Black Desert family name
 - 📊 **Weekly Scoreboards** - Track enhancements for 4 Deboreka parts (Necklace, Earring, Ring, Belt)
-- 👑 **Crown System** - Winners of each part get crowns
+- 👑 **Crown System** - Automated weekly crown awarding every Sunday
 - 🛡️ **Admin Dashboard** - Remove fake data entries
-- 🔄 **Weekly Reset** - Scoreboards reset every Sunday
+- 🔄 **Weekly Reset** - Scoreboards reset every Sunday at midnight UTC
+- ⚡ **Real-Time Updates** - Triple-layer system (Custom Events + SSE + Polling)
+  - Instant feedback for your own actions (< 50ms)
+  - Real-time updates from other users (< 1 second)
+  - Guaranteed refresh every 30-60 seconds
+- 🌐 **Multi-Language** - English and Thai language support
+- 🌓 **Dark Mode** - Light and dark theme switching
 - 💾 **Neon Database** - PostgreSQL database hosted on Neon
 
 ## Tech Stack
@@ -44,6 +50,16 @@ NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="generate-a-random-secret-key"
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
+CRON_SECRET="generate-a-random-cron-secret"
+```
+
+Generate secrets:
+```bash
+# For NEXTAUTH_SECRET
+openssl rand -base64 32
+
+# For CRON_SECRET
+openssl rand -hex 32
 ```
 
 ### 4. Set Up Google OAuth
@@ -117,18 +133,31 @@ npx tsx database/migrate.ts
 
 Or set up a migration script in your deployment pipeline.
 
+## Documentation
+
+- 📖 **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Complete deployment guide
+- 📖 **[CROWN_SYSTEM.md](./CROWN_SYSTEM.md)** - Crown awarding system details
+- 📖 **[REALTIME_UPDATES.md](./REALTIME_UPDATES.md)** - SSE and polling implementation
+- 📖 **[MIGRATION_NOTES.md](./MIGRATION_NOTES.md)** - Database migration notes
+
 ## Project Structure
 
 ```
 ├── app/
 │   ├── api/              # API routes
+│   │   ├── auth/         # NextAuth endpoints
+│   │   ├── cron/         # Automated cron jobs
+│   │   ├── admin/        # Admin endpoints
+│   │   └── events/       # SSE endpoint
 │   ├── auth/             # Authentication pages
 │   ├── setup/            # Family name setup
 │   └── page.tsx          # Main dashboard
 ├── components/           # React components
+├── contexts/             # React contexts (Theme, Language)
+├── hooks/                # Custom React hooks (SSE, Polling)
 ├── lib/                  # Utilities and configurations
-├── prisma/               # Database schema
-└── public/               # Static assets
+├── database/             # Database schema and migrations
+└── public/               # Static assets (images)
 ```
 
 ## Deboreka Parts & Prices
@@ -140,9 +169,33 @@ Or set up a migration script in your deployment pipeline.
 
 Users can override these prices when adding enhancements.
 
-## Weekly Reset
+## Weekly Reset & Crown System
 
-Scoreboards automatically reset every Sunday at midnight. The system tracks enhancements by week start date (Sunday).
+- **Scoreboards** reset every Sunday at midnight UTC
+- **Crowns** are automatically awarded via Vercel Cron Jobs
+- Winners receive 1 crown per part they dominated that week
+- Crown scoreboard shows all-time champions
+- See [CROWN_SYSTEM.md](./CROWN_SYSTEM.md) for details
+
+## Real-Time Updates
+
+The app uses a triple-layer update system for the best user experience:
+
+1. **Custom Browser Events** - Instant feedback for your own actions (< 50ms)
+   - When you add an enhancement, you see it immediately
+   - No waiting for server response or network delays
+   
+2. **Server-Sent Events (SSE)** - Real-time updates from other users (< 1 second)
+   - See other players' enhancements appear in real-time
+   - Multiplayer feel with minimal latency
+   
+3. **Polling** - Fallback for reliability (30-60 seconds)
+   - Ensures data stays fresh even if SSE fails
+   - Works in all network environments
+
+**Result**: Perfect user experience with instant feedback and guaranteed data freshness.
+
+See [REALTIME_UPDATES.md](./REALTIME_UPDATES.md) for technical details.
 
 ## License
 

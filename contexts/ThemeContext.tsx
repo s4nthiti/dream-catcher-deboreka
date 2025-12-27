@@ -12,30 +12,28 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("light")
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-    // Check localStorage or system preference
+  const [theme, setTheme] = useState<Theme>(() => {
+    // Initialize theme on client side
     if (typeof window !== "undefined") {
       const savedTheme = localStorage.getItem("theme") as Theme
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-      setTheme(savedTheme || systemTheme)
+      if (savedTheme) {
+        return savedTheme
+      }
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
     }
-  }, [])
+    return "light"
+  })
 
   useEffect(() => {
-    if (mounted && typeof window !== "undefined") {
-      const root = document.documentElement
-      if (theme === "dark") {
-        root.classList.add("dark")
-      } else {
-        root.classList.remove("dark")
-      }
-      localStorage.setItem("theme", theme)
+    // Apply theme to DOM immediately
+    const root = document.documentElement
+    if (theme === "dark") {
+      root.classList.add("dark")
+    } else {
+      root.classList.remove("dark")
     }
-  }, [theme, mounted])
+    localStorage.setItem("theme", theme)
+  }, [theme])
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"))

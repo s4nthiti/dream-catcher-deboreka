@@ -1,10 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Image from "next/image"
 import { DEBOREKA_PARTS } from "@/lib/utils"
 import { useLanguage } from "@/contexts/LanguageContext"
 import { t } from "@/lib/i18n"
+import { useSSE, SSEMessage } from "@/hooks/useSSE"
+import { usePolling } from "@/hooks/usePolling"
 
 const PART_TRANSLATIONS: Record<string, { en: string; th: string }> = {
   NECKLACE: { en: "Necklace", th: "สร้อยคอ" },
@@ -37,11 +39,7 @@ export default function CrownScoreboard() {
   const [data, setData] = useState<CrownEntry[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchCrowns()
-  }, [])
-
-  const fetchCrowns = async () => {
+  const fetchCrowns = useCallback(async () => {
     try {
       const res = await fetch("/api/crowns")
       if (res.ok) {
@@ -53,7 +51,53 @@ export default function CrownScoreboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchCrowns()
+
+    // Listen for immediate updates when enhancements are added or deleted
+    const handleEnhancementAdded = () => {
+      console.log("Enhancement added event received, refreshing crowns...")
+      fetchCrowns()
+    }
+
+    const handleEnhancementDeleted = () => {
+      console.log("Enhancement deleted event received, refreshing crowns...")
+      fetchCrowns()
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('enhancementAdded', handleEnhancementAdded)
+      window.addEventListener('enhancementDeleted', handleEnhancementDeleted)
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('enhancementAdded', handleEnhancementAdded)
+        window.removeEventListener('enhancementDeleted', handleEnhancementDeleted)
+      }
+    }
+  }, [fetchCrowns])
+
+  // Handle SSE messages for real-time updates
+  const handleSSEMessage = useCallback((message: SSEMessage) => {
+    if (message.event === "crowns:updated" || 
+        message.event === "enhancement:added" || 
+        message.event === "enhancement:deleted") {
+      console.log("Crown scoreboard SSE update received, refreshing...")
+      fetchCrowns()
+    }
+  }, [fetchCrowns])
+
+  // Connect to SSE for real-time updates
+  useSSE("/api/events", handleSSEMessage, true)
+
+  // Add polling as a fallback (every 60 seconds for crowns since they update less frequently)
+  usePolling(fetchCrowns, {
+    interval: 60000, // 60 seconds
+    enabled: true,
+  })
 
   if (loading) {
     return <div className="text-center py-8 text-gray-600 dark:text-gray-400">Loading crown scoreboard...</div>

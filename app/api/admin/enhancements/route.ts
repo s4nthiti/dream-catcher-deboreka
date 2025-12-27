@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { query, queryOne } from "@/lib/db"
+import { globalEvents, EVENTS } from "@/lib/events"
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -43,6 +44,10 @@ export async function DELETE(req: NextRequest) {
         { status: 404 }
       )
     }
+
+    // Emit events for real-time updates (crowns will be recalculated on Sunday)
+    globalEvents.emit(EVENTS.ENHANCEMENT_DELETED, { id })
+    globalEvents.emit(EVENTS.SCOREBOARD_UPDATED, { weekStart: result.weekStartDate })
 
     return NextResponse.json(result)
   } catch (error) {

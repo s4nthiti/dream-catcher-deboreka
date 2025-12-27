@@ -1,10 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Image from "next/image"
 import { DEBOREKA_PARTS } from "@/lib/utils"
 import { useLanguage } from "@/contexts/LanguageContext"
 import { t } from "@/lib/i18n"
+import { useSSE, SSEMessage } from "@/hooks/useSSE"
+import { usePolling } from "@/hooks/usePolling"
 
 const PART_TRANSLATIONS: Record<string, { en: string; th: string }> = {
   NECKLACE: { en: "Necklace", th: "สร้อยคอ" },
@@ -40,11 +42,7 @@ export default function Scoreboard() {
   const [data, setData] = useState<ScoreboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchScoreboard()
-  }, [])
-
-  const fetchScoreboard = async () => {
+  const fetchScoreboard = useCallback(async () => {
     try {
       const res = await fetch("/api/scoreboard")
       if (res.ok) {
@@ -56,7 +54,53 @@ export default function Scoreboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchScoreboard()
+
+    // Listen for immediate updates when enhancements are added or deleted
+    const handleEnhancementAdded = () => {
+      console.log("Enhancement added event received, refreshing immediately...")
+      fetchScoreboard()
+    }
+
+    const handleEnhancementDeleted = () => {
+      console.log("Enhancement deleted event received, refreshing immediately...")
+      fetchScoreboard()
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('enhancementAdded', handleEnhancementAdded)
+      window.addEventListener('enhancementDeleted', handleEnhancementDeleted)
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('enhancementAdded', handleEnhancementAdded)
+        window.removeEventListener('enhancementDeleted', handleEnhancementDeleted)
+      }
+    }
+  }, [fetchScoreboard])
+
+  // Handle SSE messages for real-time updates
+  const handleSSEMessage = useCallback((message: SSEMessage) => {
+    if (message.event === "scoreboard:updated" || 
+        message.event === "enhancement:added" || 
+        message.event === "enhancement:deleted") {
+      console.log("Scoreboard SSE update received, refreshing...")
+      fetchScoreboard()
+    }
+  }, [fetchScoreboard])
+
+  // Connect to SSE for real-time updates
+  useSSE("/api/events", handleSSEMessage, true)
+
+  // Add polling as a fallback (every 30 seconds)
+  usePolling(fetchScoreboard, {
+    interval: 30000, // 30 seconds
+    enabled: true,
+  })
 
   if (loading) {
     return <div className="text-center py-8 text-gray-600 dark:text-gray-400">Loading scoreboard...</div>

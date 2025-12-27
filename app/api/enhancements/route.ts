@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { query, queryOne } from "@/lib/db"
 import { getWeekStart } from "@/lib/utils"
+import { globalEvents, EVENTS } from "@/lib/events"
 
 export async function POST(req: NextRequest) {
   try {
@@ -44,8 +45,9 @@ export async function POST(req: NextRequest) {
       throw new Error("Failed to create enhancement")
     }
 
-    // Check if user should get a crown (winner of the week for this part)
-    await checkAndAwardCrown(part, weekStart)
+    // Emit events for real-time updates (crowns will be awarded on Sunday)
+    globalEvents.emit(EVENTS.ENHANCEMENT_ADDED, { part, count, weekStart })
+    globalEvents.emit(EVENTS.SCOREBOARD_UPDATED, { weekStart })
 
     return NextResponse.json(result)
   } catch (error) {
@@ -122,37 +124,3 @@ export async function GET(req: NextRequest) {
   }
 }
 
-async function checkAndAwardCrown(part: string, weekStart: Date) {
-  // Get all enhancements for this part and week, grouped by user
-  const userTotals = await query<{
-    userId: string
-    totalCount: number
-  }>(
-    `SELECT "userId", SUM(count) as "totalCount"
-     FROM enhancements
-     WHERE part = $1 AND "weekStartDate" = $2 AND "isDeleted" = false
-     GROUP BY "userId"
-     ORDER BY "totalCount" DESC
-     LIMIT 1`,
-    [part, weekStart]
-  )
-
-  if (userTotals.length > 0 && userTotals[0].totalCount > 0) {
-    const winnerId = userTotals[0].userId
-
-    // Check if crown already exists
-    const existingCrown = await queryOne<{ id: string }>(
-      `SELECT id FROM crowns 
-       WHERE "userId" = $1 AND part = $2 AND "weekStartDate" = $3`,
-      [winnerId, part, weekStart]
-    )
-
-    if (!existingCrown) {
-      await query(
-        `INSERT INTO crowns ("userId", part, "weekStartDate", "createdAt")
-         VALUES ($1, $2, $3, NOW())`,
-        [winnerId, part, weekStart]
-      )
-    }
-  }
-}
